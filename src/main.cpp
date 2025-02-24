@@ -12,9 +12,9 @@ It will use both cores to process the wifi and blink operations
 TaskHandle_t Task1;
 TaskHandle_t Task2;
 
-const uint8_t ledPin = LED_BUILTIN;
+#define LEDPIN 2
 
-RTC_DATA_ATTR bool isAPMode = true;
+RTC_DATA_ATTR bool isAPMode = false;
 
 bool volatile isWifiConfigured = false;
 bool volatile isNoipConfigured = false;
@@ -38,19 +38,20 @@ RTC_DATA_ATTR char password[64] = "";
 
 bool isConfigured(bool value, uint16_t delayTime){
   if (!value) {
-    digitalWrite(ledPin, HIGH);
+    digitalWrite(LEDPIN, HIGH);
     delay(delayTime);
-    digitalWrite(ledPin, LOW);
+    digitalWrite(LEDPIN, LOW);
     delay(delayTime);
   }
   return value;
 }
 
-void led_feedback(void *pvParameters){
-  for(;;){
+void Task1Potato(void *pvParameters){
+  while (1) {
+    Serial.println(".");
     if (!isConfigured(isWifiConfigured, 1000)) continue;
     if (!isConfigured(isNoipConfigured, 250)) continue;
-    delay(5000);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
 }
 
@@ -62,6 +63,7 @@ void setup_ap(){
     WiFi.softAP(default_ap_ssid, default_ap_password);
   }
   vTaskDelay(1000 / portTICK_PERIOD_MS);
+  //TODO: Update to single line if statement
   if (WiFi.softAPIP() != IPAddress(0, 0, 0, 0)){
     Serial.println("AP IP Address: " + WiFi.softAPIP().toString());
     isWifiConfigured = true;
@@ -76,36 +78,38 @@ void setup_station(){
 }
 
 void server_stuff(void *pvParameters){
+  isAPMode = !isAPMode;
   if (isAPMode){
-    setup_ap();
     Serial.println("AP Mode");
+    setup_ap();
   } else {
-    setup_station();
     Serial.println("Station Mode");
+    setup_station();
   }
 }
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(115200);
+  Serial.begin(9600);
+  pinMode(LEDPIN, OUTPUT);
   xTaskCreatePinnedToCore(
-    led_feedback,
+    Task1Potato,
     "Led Feedback",
-    1024,
+    10000,
     NULL,
-    0,
+    1,
     &Task1,
     0
   );
-  xTaskCreatePinnedToCore(
-    led_feedback,
-    "Server Stuff",
-    4096,
-    NULL,
-    0,
-    &Task2,
-    1
-  );
+  // xTaskCreatePinnedToCore(
+  //   server_stuff,
+  //   "Server Stuff",
+  //   4096,
+  //   NULL,
+  //   0,
+  //   &Task2,
+  //   1
+  // );
 }
 
 void loop() {
